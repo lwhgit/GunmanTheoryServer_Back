@@ -1,7 +1,7 @@
 var net = require("net");
 var account = require("./accounts/account");
 
-var port = 8763;
+var port = 8762;
 
 var AccountManager = account.AccountManager;
 
@@ -18,8 +18,19 @@ var server = net.createServer(function(socket) {
 });
 
 server.listen(port, function() {
-    console.log("Server is running on *:%s", port);
+    console.log("Login Server is running on *:%s", port);
     onServerOpened();
+});
+
+var gsSocket = net.connect({
+    host: "127.0.0.1",
+    port: 8763
+}, function() {
+    console.log("Connected to Game Server.");
+});
+
+gsSocket.on("error", function(error) {
+    console.log("Error: " + error);
 });
 
 var accountManager = new AccountManager();
@@ -45,14 +56,28 @@ function onSocketData(socket, data) {
 
     console.log("Received: " + msg);
 
-    if (cmd[0] == "register" && cmd.length >= 3) {
-        if (accountManager.isExists(cmd[1])) {
-            socket.write("register_failed This id already exists.")
+    if (cmd[0] == "register" && cmd.length >= 4) {
+        if (accountManager.isIdExists(cmd[1])) {
+            socket.write("register_failed This id already exists.");
+            console.log("register_failed This id already exists.");
+        } else if (accountManager.isNicknameExists(cmd[3])) {
+            socket.write("register_failed This nickname already exists.");
+            console.log("register_failed This nickname already exists.");
         } else {
-            accountManager.register(cmd[1], cmd[2])
+            accountManager.register(cmd[1], cmd[2], cmd[3])
             socket.write("register_successed");
+            console.log("register_successed");
         }
-    } else if (cmd[0] == "login" && cmd.length >= 4) {
-        
+    } else if (cmd[0] == "ask_login_hash" && cmd.length >= 3) {
+        var account = accountManager.login(cmd[1], cmd[2]);
+        if (account) {
+            var key = account.getKeyHash();
+            gsSocket.write("ask_login_hash_successed " + key + " " + account.nickname);
+            socket.write("ask_login_hash_successed " + key + " " + account.nickname);
+            console.log("ask_login_hash_successed " + key + " " + account.nickname);
+        } else {
+            socket.write("ask_login_hash_failed This account not exists.");
+            console.log("ask_login_hash_failed This account not exists.");
+        }
     }
 }
